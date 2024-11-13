@@ -10,9 +10,11 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
 import pandas as pd
 
 def example(video_link, json_path, CLEAR_JSON=True):
+
     PATH = "C:/Program Files/chromedriver-win64/chromedriver.exe"
     REDIRECT = "https://www.youtube.com/redirect?"
     AMAZON = "https://www.amazon.com"
@@ -72,6 +74,9 @@ def example(video_link, json_path, CLEAR_JSON=True):
     driver.quit()
 def amzn_web(driver, json_objs):
     #PRICE_PATH= '//*[@id="corePriceDisplay_desktop_feature_div"]/div[1]/span[2]'
+    #set headless properties
+    options = Options()
+    options.add_argument("--headless=new")
     current_url = driver.current_url
     PRICE_ID = 'corePrice_feature_div'
     IMG_PATH = '//*[@id="landingImage"]'
@@ -87,7 +92,6 @@ def amzn_web(driver, json_objs):
         symbol_class = price.find_element(By.CLASS_NAME, PRICE_SYMBOL_CLASS)
         fraction_class = price.find_element(By.CLASS_NAME, PRICE_FRACTION_CLASS)
         pricef = symbol_class.text + whole_class.text + '.' + fraction_class.text
-
     except:
         try:
             price = driver.find_element(By.XPATH, KINDLE_PRICE_PATH)
@@ -117,8 +121,8 @@ if __name__ == '__main__':
     #JSON_PATH_2 = 'product_info_2.json'
     #JSON_PATH_3 = 'product_info_3.json'
     JSON_PATH_4 = 'product_info_4.json'
-    #example(LINK_ZERO, JSON_PATH_1)
-    example(AMZN_LINK_TWO, JSON_PATH_4)
+    example(LINK_ZERO, JSON_PATH_1)
+    #example(AMZN_LINK_TWO, JSON_PATH_4)
     #example(LINK_ONE, JSON_PATH_2)
     #example(AMZN_LINK_ZERO, JSON_PATH_3)
     #example('https://www.youtube.com/watch?v=ju8OkY4EE24')
