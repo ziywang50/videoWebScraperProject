@@ -18,8 +18,10 @@ class GenericScraper:
     def __init__(self, product_link):
         chrome_options = Options()
         chrome_options.add_argument("--start-maximized")  # Ensure the new session starts maximized
-        self.__price_regex = re.compile('(USD|EUR|GBP|CNY|KRW|JPY|€|£|¥|₩|\$)\s?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)|(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)\s?(USD|EUR|GBP|CNY|KRW|JPY|€|£|\$|¥|₩)')
-        self.__price_regex_dec = re.compile('(USD|EUR|GBP|CNY|KRW|JPY|€|£|¥|₩|\$)\s?(\d{1,3}(?:[.,]\d{3})*\.\d{1,2})|(\d{1,3}(?:[.,]\d{3})*\.\d{1,2})\s?(USD|EUR|GBP|CNY|KRW|JPY|€|£|\$|¥|₩)')
+        #Both decimals and integers
+        self.__price_regex = re.compile('\s*(USD|EUR|GBP|CNY|KRW|JPY|€|£|¥|₩|\$)\s?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)|(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)\s?(USD|EUR|GBP|CNY|KRW|JPY|€|£|\$|¥|₩)')
+        #force to have a decimal, which is the prioritized method
+        self.__price_regex_dec = re.compile('\s*(USD|EUR|GBP|CNY|KRW|JPY|€|£|¥|₩|\$)\s?(\d{1,3}(?:[.,]\d{3})*\.\d{1,2})|(\d{1,3}(?:[.,]\d{3})*\.\d{1,2})\s?(USD|EUR|GBP|CNY|KRW|JPY|€|£|\$|¥|₩)')
         self.product_link = product_link
         self.driver = webdriver.Chrome()
         self.driver.get(self.product_link)
@@ -217,7 +219,7 @@ class GenericScraper:
     #finding_wait is the wait time until I find the corresponding elements on a webpage.
     #extra_wait_param is the multiple of wait time if a timeout occurs
 
-    def match_price(self, initial_wait=5, finding_wait=1, final_wait=1, extra_wait_param=3):
+    def match_price(self, initial_wait=5, finding_wait=2, final_wait=1, extra_wait_param=3):
         reli = []
         p = None
         span = None
@@ -235,7 +237,8 @@ class GenericScraper:
             pass
         '''
         prices = ['"price"', '"Price"']
-        list_of_tags = ['div', 'span']
+        #list_of_tags = ['div', 'span']
+        list_of_tags = ['div', 'span', 'meta', 'data', 'strong', 'ins']
         prices_xpath = self.__list_to_xPath_helper(prices, list_of_tags)
         '''
         for i,price in enumerate(prices):
@@ -274,9 +277,13 @@ class GenericScraper:
                     size = float(i.rect['height']) * float(i.rect['width'])
                     #Store decimals separately can be confusing
                     match_res_dec = re.search(self.__price_regex_dec, priceex)
-                    match_res = re.search(self.__price_regex, priceex)
-                    if match_res:
-                        heapq.heappush(reli, (-size, match_res.group()))
+                    if (match_res_dec):
+                        heapq.heappush(reli, (-size, match_res_dec.group()))
+                    #Some prices only contain integers
+                    else:
+                        match_res = re.search(self.__price_regex, priceex)
+                        if match_res:
+                            heapq.heappush(reli, (-size, match_res.group()))
         if (reli):
             pri = heapq.heappop(reli)
             time.sleep(final_wait)
@@ -298,7 +305,9 @@ def main():
     LINK_6 = "https://www.amazon.com/gp/product/B014U596GO/ref=as_li_tl?ie=UTF8&tag=sousvideevery-20&camp=1789&creative=9325&linkCode=as2&creativeASIN=B014U596GO&linkId=892082d1782f22d10203abec5bed7935&th=1"
     LINK_7 = "https://www.ebay.com/itm/356144750186?_skw=leica+m9&epid=100164147&itmmeta=01JCPWJ6P4Y9373YBJ72A9V9FK&hash=item52ebe19e6a:g:X4wAAOSwu5RnC7Cc&itmprp=enc%3AAQAJAAAA4HoV3kP08IDx%2BKZ9MfhVJKm63WuYlvF0cVTRkbIK%2BWpKuEHrQeUsn0r7Bb9%2FnNfmHUh%2FiwN%2FfoFb3giIedd%2FsEh5i53WRrhq90AhSBPEM16f1ZHWGa3i7on3tCWqPBjQiArYYaIR28ov%2Fyc78v1nqN3riovXDGJRU63OdiK2mSQdclblOac%2FlTB9Y%2FT1YS1thhRxqqRujzi9BvKSYV9w1XaILsVl2GyCpdUrYO03CkJx6WrUuLZwmiUtVYd9pIy9B3BnPBTJsJmqMfE7uSX2OS5JRlGFZvBvHqvfs3pgn4dH%7Ctkp%3ABFBMluvI3OVk"
     LINK_8 = "https://www.capturelandscapes.com/photographer-month-thomas-heaton/"
-    ex = GenericScraper(LINK_8)
+    LINK_9 = "https://thomasheaton.co.uk/product/my-book/"
+    LINK_10 = "https://store.dji.com/product/dji-rs-3?ch=launch-rs3-samholland&clickaid=X3zYImu0We91G3QjtfjeJM7ZOpzMZU12&clickpid=745444&clicksid=7f11750ff3a2407875d68a8470411788&from=dap_unique&pm=custom&utm_campaign=launch-rs3&utm_content=samholland&utm_medium=kol-affiliates&utm_source=yt&vid=116541"
+    ex = GenericScraper(LINK_10)
     print(ex.match_price())
     print(ex.find_product_title())
     print(ex.find_product_image())
