@@ -14,6 +14,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import NoSuchElementException
 from amazoncaptcha import AmazonCaptcha
 from GenericScraper import GenericScraper
+from selenium.common.exceptions import InvalidSessionIdException
 
 
 def json_from_video(video_link, json_path, CLEAR_JSON=True):
@@ -46,23 +47,32 @@ def json_from_video(video_link, json_path, CLEAR_JSON=True):
             if (href.find(REDIRECT) == 0):
                 response = requests.get(href)
                 if (response.status_code == 200):
-                    driver = webdriver.Chrome()
-                    print(f"Link name is {href}")
-                    driver.get(href)
-                    if driver.find_element(By.XPATH, '//*[@id="invalid-token-redirect-goto-site-button"]'):
-                        driver.find_element(By.XPATH, '//*[@id="invalid-token-redirect-goto-site-button"]').click()
-                        #break
-                    current_url = driver.current_url
-                    for s in SOCIAL_MEDIA_URLS:
-                        if (current_url.find(s) == 0):
-                            time.sleep(0.5)
-                            driver.close()
-                    if (current_url.find(AMAZON) == 0):
-                        amzn_web(driver, json_objs)
-                    else:
-                        generic_web(current_url, json_objs)
-                    time.sleep(0.5)
-                    driver.close()
+                    try:
+                        IS_SOCIAL_MEDIA_URL = False
+                        driver = webdriver.Chrome()
+                        print(f"Link name is {href}")
+                        driver.get(href)
+                        if driver.find_element(By.XPATH, '//*[@id="invalid-token-redirect-goto-site-button"]'):
+                            driver.find_element(By.XPATH, '//*[@id="invalid-token-redirect-goto-site-button"]').click()
+                            #break
+                        current_url = driver.current_url
+                        for s in SOCIAL_MEDIA_URLS:
+                            if (current_url.find(s) == 0):
+                                IS_SOCIAL_MEDIA_URL = True
+                                time.sleep(0.5)
+                                driver.close()
+                                break
+                        if not IS_SOCIAL_MEDIA_URL:
+                            if (current_url.find(AMAZON) == 0):
+                                amzn_web(driver, json_objs)
+                            else:
+                                generic_web(current_url, json_objs)
+                        time.sleep(0.5)
+                        driver.close()
+                    except InvalidSessionIdException as e:
+                        print("Link skipped due to InvalidSessionIdException ", e)
+                        continue
+
     #By default, it clears the current json with the same name.
     if (CLEAR_JSON):
         with open(json_path, "w") as outfile:
@@ -74,8 +84,8 @@ def json_from_video(video_link, json_path, CLEAR_JSON=True):
     #     items = driver.find_elements(By.CLASS_NAME, "product-item style-scope ytd-merch-shelf-item-renderer")
     #if (len(driver.find_elements(By.CLASS_NAME, "style-scope ytd-merch-shelf-item-renderer")) > 0):
     #    items = driver.find_elements(By.CLASS_NAME, "style-scope ytd-merch-shelf-item-renderer")
-    time.sleep(10)
-    driver.quit()
+    #time.sleep(10)
+    #driver.quit()
 def amzn_web(driver, json_objs):
     #PRICE_PATH= '//*[@id="corePriceDisplay_desktop_feature_div"]/div[1]/span[2]'
     #set headless properties
@@ -126,22 +136,22 @@ def amzn_web(driver, json_objs):
     #print("The price of the product is:", symbol_class.text, whole_class.text, '.', fraction_class.text, "with image link", img.get_attribute('src'))
     #print("Successful")
 def generic_web(current_url, json_objs):
-    generic_scraper = GenericScraper(current_url)
-    price = generic_scraper.match_price()
-    if(price != 'Not found'):
-        product_title = generic_scraper.find_product_title()
-        if(product_title != 'Not found'):
-            product_img_url = generic_scraper.find_product_image(product_title)
-            if (product_img_url != 'Not found'):
-                print("appending json...")
-                info = {
-                    "product_price": price,
-                    "product_image": product_img_url,
-                    "product_name": product_title,
-                    "buy_link": current_url
-                }
-                json_objs.append(info)
-    generic_scraper.driver.close()
+        generic_scraper = GenericScraper(current_url)
+        price = generic_scraper.match_price()
+        if(price != 'Not found'):
+            product_title = generic_scraper.find_product_title()
+            if(product_title != 'Not found'):
+                product_img_url = generic_scraper.find_product_image(product_title)
+                if (product_img_url != 'Not found'):
+                    print("appending json...")
+                    info = {
+                        "product_price": price,
+                        "product_image": product_img_url,
+                        "product_name": product_title,
+                        "buy_link": current_url
+                    }
+                    json_objs.append(info)
+        generic_scraper.driver.close()
 
 if __name__ == '__main__':
     LINK_ZERO = 'https://www.youtube.com/watch?v=ZFbiZIsS9vQ'
