@@ -12,9 +12,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import TimeoutException
 from amazoncaptcha import AmazonCaptcha
 from GenericScraper import GenericScraper
 from selenium.common.exceptions import InvalidSessionIdException
+import re
 
 
 def json_from_video(video_link, json_path, CLEAR_JSON=True):
@@ -86,7 +88,7 @@ def json_from_video(video_link, json_path, CLEAR_JSON=True):
     #    items = driver.find_elements(By.CLASS_NAME, "style-scope ytd-merch-shelf-item-renderer")
     #time.sleep(10)
     #driver.quit()
-def amzn_web(driver, json_objs):
+def amzn_web(driver, json_objs, related_products=True):
     #PRICE_PATH= '//*[@id="corePriceDisplay_desktop_feature_div"]/div[1]/span[2]'
     #set headless properties
     options = Options()
@@ -110,21 +112,36 @@ def amzn_web(driver, json_objs):
     PRICE_WHOLE_CLASS = 'a-price-whole'
     PRICE_SYMBOL_CLASS = 'a-price-symbol'
     PRICE_FRACTION_CLASS = 'a-price-fraction'
+    PRICE_REGEX = re.compile(
+        '\s*(USD|EUR|GBP|CNY|KRW|JPY|€|£|¥|₩|\$)\s?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)|(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)\s?(USD|EUR|GBP|CNY|KRW|JPY|€|£|\$|¥|₩)')
+    #Find element in Amazon's main section
     try:
         price = driver.find_element(By.ID, PRICE_ID)
+        #suppose the class is stored with whole elements and decimal elements
         whole_class = price.find_element(By.CLASS_NAME, PRICE_WHOLE_CLASS)
         symbol_class = price.find_element(By.CLASS_NAME, PRICE_SYMBOL_CLASS)
         fraction_class = price.find_element(By.CLASS_NAME, PRICE_FRACTION_CLASS)
         price_value = symbol_class.text + whole_class.text + '.' + fraction_class.text
+        #
     except NoSuchElementException:
         try:
-            price = driver.find_element(By.XPATH, KINDLE_PRICE_PATH)
-            price_value = price.text
-        except:
-            print("Find price failed")
+            spans_with_price_parent_or_grandparent = driver.find_elements(
+                By.XPATH, "//span[parent::*[contains(@class, 'price')] or ancestor::*[contains(@class, 'price')]]"
+            )
+            # Print the found spans
+            if (spans_with_price_parent_or_grandparent):
+                for span in spans_with_price_parent_or_grandparent:
+                    price_search = re.search(PRICE_REGEX, span.text)
+                    if price_search:
+                        price_value = price_search.group()
+        except (TypeError, ValueError) as e:
+            print("Find price failed. Message: " + e)
             return
-    img = driver.find_element(By.XPATH, IMG_PATH)
-    title = driver.find_element(By.XPATH, TITLE_PATH)
+    try:
+        img = driver.find_element(By.XPATH, IMG_PATH)
+        title = driver.find_element(By.XPATH, TITLE_PATH)
+    except NoSuchElementException:
+        return
     info = {
         "product_price":  price_value,
         "product_image": img.get_attribute('src'),
@@ -133,8 +150,17 @@ def amzn_web(driver, json_objs):
     }
     print("appending json...")
     json_objs.append(info)
-    #print("The price of the product is:", symbol_class.text, whole_class.text, '.', fraction_class.text, "with image link", img.get_attribute('src'))
-    #print("Successful")
+#Find elements in the related products section
+    if (related_products):
+        try:
+            wait = WebDriverWait(driver, 5)  # Wait for up to 10 seconds
+            carousel_items = wait.until(
+                EC.presence_of_all_elements_located((By.XPATH, "//li[contains(@class, 'a-carousel')]"))
+            )
+        except TimeoutException as e:
+            pass
+
+
 def generic_web(current_url, json_objs):
         generic_scraper = GenericScraper(current_url)
         price = generic_scraper.match_price()
@@ -164,9 +190,9 @@ if __name__ == '__main__':
     JSON_PATH_2 = 'product_info_2.json'
     #JSON_PATH_3 = 'product_info_3.json'
     JSON_PATH_4 = 'product_info_4.json'
-    json_from_video(AMZN_LINK_TWO, JSON_PATH_4)
-    json_from_video(LINK_ZERO, JSON_PATH_0)
-    #json_from_video(LINK_TWO, JSON_PATH_2)
+    #json_from_video(AMZN_LINK_TWO, JSON_PATH_4)
+    #json_from_video(LINK_ZERO, JSON_PATH_0)
+    json_from_video(LINK_TWO, JSON_PATH_2)
     '''
     df = pd.read_json("product_info.json", orient='records')
     print(df.head())

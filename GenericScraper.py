@@ -201,7 +201,7 @@ class GenericScraper:
 
     #initial_wait is the initial wait tiem
     #finding_wait is the wait time until I find the corresponding elements on a webpage.
-    def find_product_image(self, product_title, initial_wait=5, finding_wait=1, extra_wait_param=2, final_wait=0.5):
+    def find_product_image(self, product_title, initial_wait=5, finding_wait=2, extra_wait_param=2, final_wait=0.5):
         heap_of_images = []
         #time.sleep(initial_wait)
         WebDriverWait(self.driver, initial_wait).until(
@@ -255,7 +255,7 @@ class GenericScraper:
     #initial_wait is the initial wait tiem
     #finding_wait is the wait time until I find the corresponding elements on a webpage.
     #extra_wait_param is the multiple of wait time if a timeout occurs
-    def find_product_title(self, initial_wait=5, finding_wait=1, final_wait=0.5, extra_wait_param=3, text_classifier_threshold=0.7):
+    def find_product_title(self, initial_wait=5, finding_wait=2, final_wait=0.5, extra_wait_param=3, text_classifier_threshold=0.7):
         t = None
         heap_of_titles = []
         titlels = ['"title"', '"Title"', '"name"', '"Name"', '"header"', '"Header"', '"Heading"', '"heading"',
@@ -311,7 +311,7 @@ class GenericScraper:
     #finding_wait is the wait time until I find the corresponding elements on a webpage.
     #extra_wait_param is the multiple of wait time if a timeout occurs
 
-    def match_price(self, initial_wait=5, finding_wait=1, final_wait=0.5, extra_wait_param=3):
+    def match_price(self, initial_wait=5, finding_wait=2, final_wait=0.5, extra_wait_param=3):
         reli = []
         p = None
         span = None
