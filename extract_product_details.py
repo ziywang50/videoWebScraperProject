@@ -164,9 +164,9 @@ if __name__ == '__main__':
     JSON_PATH_2 = 'product_info_2.json'
     #JSON_PATH_3 = 'product_info_3.json'
     JSON_PATH_4 = 'product_info_4.json'
-    #json_from_video(AMZN_LINK_TWO, JSON_PATH_4)
-    #json_from_video(LINK_ZERO, JSON_PATH_0)
-    json_from_video(LINK_TWO, JSON_PATH_2)
+    json_from_video(AMZN_LINK_TWO, JSON_PATH_4)
+    json_from_video(LINK_ZERO, JSON_PATH_0)
+    #json_from_video(LINK_TWO, JSON_PATH_2)
     '''
     df = pd.read_json("product_info.json", orient='records')
     print(df.head())

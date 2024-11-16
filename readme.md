@@ -23,4 +23,6 @@ To run the script
 ```
 python extract_product_details.py
 ```
+Link for demo video
+https://drive.google.com/file/d/18BKEwXRUjLv5VuqUmgYAG6bbZCru5z9M/view?usp=sharing
 
