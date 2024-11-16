@@ -16,7 +16,7 @@ from amazoncaptcha import AmazonCaptcha
 from GenericScraper import GenericScraper
 
 
-def example(video_link, json_path, CLEAR_JSON=True):
+def json_from_video(video_link, json_path, CLEAR_JSON=True):
 
     PATH = "C:/Program Files/chromedriver-win64/chromedriver.exe"
     REDIRECT = "https://www.youtube.com/redirect?"
@@ -29,7 +29,10 @@ def example(video_link, json_path, CLEAR_JSON=True):
     service = Service(executable_path=PATH)
     driver = webdriver.Chrome()
     driver.get(video_link)
-    driver.maximize_window()
+    try:
+        driver.maximize_window()
+    except:
+        pass
     WebDriverWait(driver, 20).until(EC.element_to_be_clickable((By.XPATH, "//*[@id='expand']")))
     if (len(driver.find_elements(By.XPATH, "//*[@id='expand']")) > 0):
         input_element = driver.find_element(By.XPATH, '//*[@id="expand"]')
@@ -39,26 +42,27 @@ def example(video_link, json_path, CLEAR_JSON=True):
     links = WebElement.find_elements(By.TAG_NAME, 'a')
     for link in links:
         href = link.get_attribute('href')
-        if (href.find(REDIRECT) == 0):
-            response = requests.get(href)
-            if (response.status_code == 200):
-                driver = webdriver.Chrome()
-                print(f"Link name is {href}")
-                driver.get(href)
-                if driver.find_element(By.XPATH, '//*[@id="invalid-token-redirect-goto-site-button"]'):
-                    driver.find_element(By.XPATH, '//*[@id="invalid-token-redirect-goto-site-button"]').click()
-                    #break
-                current_url = driver.current_url
-                for s in SOCIAL_MEDIA_URLS:
-                    if (current_url.find(s) == 0):
-                        time.sleep(2)
-                        driver.quit()
-                if (current_url.find(AMAZON) == 0):
-                    amzn_web(driver, json_objs)
-                else:
-                    generic_web(current_url, json_objs)
-                time.sleep(2)
-                driver.quit()
+        if href:
+            if (href.find(REDIRECT) == 0):
+                response = requests.get(href)
+                if (response.status_code == 200):
+                    driver = webdriver.Chrome()
+                    print(f"Link name is {href}")
+                    driver.get(href)
+                    if driver.find_element(By.XPATH, '//*[@id="invalid-token-redirect-goto-site-button"]'):
+                        driver.find_element(By.XPATH, '//*[@id="invalid-token-redirect-goto-site-button"]').click()
+                        #break
+                    current_url = driver.current_url
+                    for s in SOCIAL_MEDIA_URLS:
+                        if (current_url.find(s) == 0):
+                            time.sleep(0.5)
+                            driver.close()
+                    if (current_url.find(AMAZON) == 0):
+                        amzn_web(driver, json_objs)
+                    else:
+                        generic_web(current_url, json_objs)
+                    time.sleep(0.5)
+                    driver.close()
     #By default, it clears the current json with the same name.
     if (CLEAR_JSON):
         with open(json_path, "w") as outfile:
@@ -66,9 +70,6 @@ def example(video_link, json_path, CLEAR_JSON=True):
     else:
         with open(json_path, "a") as outfile:
             json.dump(json_objs, outfile)
-    driver = webdriver.Chrome()
-    driver.get(video_link)
-    driver.maximize_window()
     #if (len(driver.find_elements(By.CLASS_NAME, "product-item style-scope ytd-merch-shelf-item-renderer")) > 0):
     #     items = driver.find_elements(By.CLASS_NAME, "product-item style-scope ytd-merch-shelf-item-renderer")
     #if (len(driver.find_elements(By.CLASS_NAME, "style-scope ytd-merch-shelf-item-renderer")) > 0):
@@ -120,6 +121,7 @@ def amzn_web(driver, json_objs):
         "product_name": title.text,
         "buy_link": current_url
     }
+    print("appending json...")
     json_objs.append(info)
     #print("The price of the product is:", symbol_class.text, whole_class.text, '.', fraction_class.text, "with image link", img.get_attribute('src'))
     #print("Successful")
@@ -129,7 +131,7 @@ def generic_web(current_url, json_objs):
     if(price != 'Not found'):
         product_title = generic_scraper.find_product_title()
         if(product_title != 'Not found'):
-            product_img_url = generic_scraper.find_product_image()
+            product_img_url = generic_scraper.find_product_image(product_title)
             if (product_img_url != 'Not found'):
                 print("appending json...")
                 info = {
@@ -139,21 +141,22 @@ def generic_web(current_url, json_objs):
                     "buy_link": current_url
                 }
                 json_objs.append(info)
+    generic_scraper.driver.close()
 
 if __name__ == '__main__':
-    LINK_ZERO = 'https://www.youtube.com/watch?v=qm1BBmV8RRY'
+    LINK_ZERO = 'https://www.youtube.com/watch?v=ZFbiZIsS9vQ'
     LINK_ONE = 'https://www.youtube.com/watch?v=ju8OkY4EE24'
+    LINK_TWO = 'https://www.youtube.com/watch?v=8QM7bnB1HzA'
     AMZN_LINK_TWO = 'https://www.youtube.com/watch?v=RYRLxVfijpI'
     #AMZN_LINK_ZERO = 'https://www.youtube.com/watch?v=yOl7q-DIz4s'
+    JSON_PATH_0 = 'product_info_0.json'
     JSON_PATH_1 = 'product_info_1.json'
-    #JSON_PATH_2 = 'product_info_2.json'
+    JSON_PATH_2 = 'product_info_2.json'
     #JSON_PATH_3 = 'product_info_3.json'
     JSON_PATH_4 = 'product_info_4.json'
-    example(LINK_ZERO, JSON_PATH_1)
-    #example(AMZN_LINK_TWO, JSON_PATH_4)
-    #example(LINK_ONE, JSON_PATH_2)
-    #example(AMZN_LINK_ZERO, JSON_PATH_3)
-    #example('https://www.youtube.com/watch?v=ju8OkY4EE24')
+    #json_from_video(AMZN_LINK_TWO, JSON_PATH_4)
+    #json_from_video(LINK_ZERO, JSON_PATH_0)
+    json_from_video(LINK_TWO, JSON_PATH_2)
     '''
     df = pd.read_json("product_info.json", orient='records')
     print(df.head())

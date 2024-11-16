@@ -3,3 +3,4 @@ transformers>=4.11.3
 Pillow>=8.4.0
 selenium>=4.11.2
 amazoncaptcha>=0.5.8
+numpy>=1.23.0

@@ -12,6 +12,12 @@ from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.chrome.options import Options
 from transformers import pipeline
+from transformers import CLIPProcessor, CLIPModel
+import torch
+from PIL import Image
+import numpy as np
+import requests
+
 
 
 class GenericScraper:
@@ -22,6 +28,7 @@ class GenericScraper:
         self.__price_regex = re.compile('\s*(USD|EUR|GBP|CNY|KRW|JPY|€|£|¥|₩|\$)\s?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)|(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)\s?(USD|EUR|GBP|CNY|KRW|JPY|€|£|\$|¥|₩)')
         #force to have a decimal, which is the prioritized method
         self.__price_regex_dec = re.compile('\s*(USD|EUR|GBP|CNY|KRW|JPY|€|£|¥|₩|\$)\s?(\d{1,3}(?:[.,]\d{3})*\.\d{1,2})|(\d{1,3}(?:[.,]\d{3})*\.\d{1,2})\s?(USD|EUR|GBP|CNY|KRW|JPY|€|£|\$|¥|₩)')
+        #self.__url_regex = re.compile("^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,6}(:\d+)?(\/[^\s]*)?$")
         self.product_link = product_link
         self.driver = webdriver.Chrome()
         self.driver.get(self.product_link)
@@ -78,13 +85,14 @@ class GenericScraper:
                 right+=']'
         return left+right
 
-    def __find_max_img_helper(self, driver, heap_of_images, finding_wait=2, extra_wait_param=3):
+    def __find_max_img_helper(self, driver, heap_of_images, product_title, finding_wait=2, extra_wait_param=3, similarity_threshold=0.2):
         try:
             WebDriverWait(driver, finding_wait).until(EC.presence_of_all_elements_located((By.TAG_NAME, 'img')))
         except TimeoutException:
             WebDriverWait(driver, extra_wait_param*finding_wait).until(EC.presence_of_all_elements_located((By.TAG_NAME, 'img')))
         # front_page_container = driver.find_element(By.CSS_SELECTOR, 'div.front-page')
         im = driver.find_elements(By.TAG_NAME, 'img')
+        model, processor = self._load_clip_model()
         # print(im.get_attribute('src'))
         if im:
             for i in im:
@@ -93,11 +101,22 @@ class GenericScraper:
                     # Image tags are 'src' or 'srcset'
                     if i.get_attribute('src'):
                         img_size = float(i.get_attribute('width')) * float(i.get_attribute('height'))
-                        heapq.heappush(heap_of_images, (-img_size, i.get_attribute('src')))
+                        img_url = i.get_attribute('src')
+                        similarity = self._find_image_match_product_similarity(model, processor, img_url, product_title)
+                        #Check if image-text similarity is greater than threshold
+                        if (similarity >= similarity_threshold):
+                            heapq.heappush(heap_of_images, (-img_size, -similarity, i.get_attribute('src')))
                     elif i.get_attribute('srcset'):
                         img_size = float(i.get_attribute('width')) * float(i.get_attribute('height'))
                         pdt_links = i.get_attribute('srcset').split(' ')
-                        heapq.heappush(heap_of_images, (-img_size, pdt_links[0]))
+                        #Check if image-text similarity is greater than threshold
+                        for pdt_url in pdt_links:
+                            #pdt_url = re.search(self.__url_regex, pdt_url)
+                            if pdt_url:
+                                similarity = self._find_image_match_product_similarity(model, processor, pdt_url.group(),
+                                                                                       product_title)
+                                if (similarity >= similarity_threshold):
+                                    heapq.heappush(heap_of_images, (-img_size, -similarity, pdt_url))
                     # print("Image size is ", max_img_size, "with url ", max_img_url)
         # print(max_img_url)
         return heap_of_images
@@ -106,19 +125,88 @@ class GenericScraper:
         regex = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))"
         url = re.findall(regex, string)
         return url[0][0]
-    def zero_shot_text_binary_classify(self, text, score_threshold):
+    def _zero_shot_text_binary_classify(self, text, score_threshold):
         classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
 
         labels = ["product", "not a product"]
 
         result = classifier(text, candidate_labels=labels)
         return result['scores'][0] > score_threshold
+#-------------------------------------------------------Functions to apply CLIP models----------------------------------------------------
+    #Load a CLIP model and CLIP processor
+    def _load_clip_model(self, model_path="openai/clip-vit-base-patch32", processor_path="openai/clip-vit-base-patch32"):
+        # Load the CLIP model and processor from Hugging Face
+        model = CLIPModel.from_pretrained(model_path)
+        processor = CLIPProcessor.from_pretrained(processor_path)
+        return model, processor
+
+    # Function to load image from file path or URL
+    def _load_image(self, image_path_or_url):
+        if image_path_or_url.startswith("http"):
+            # If the input is a URL, fetch the image
+            image = Image.open(requests.get(image_path_or_url, stream=True).raw)
+        else:
+            # If it's a local file path, open the image from disk
+            image = Image.open(image_path_or_url)
+        return image
+
+    # Function to compute similarity score
+    def _find_image_match_product_similarity(self, model, processor, image_path_or_url, product_title):
+        try:
+            # Load and preprocess the image
+            image = self._load_image(image_path_or_url)
+        except FileNotFoundError:
+            return 0
+
+        # Preprocess the image and text (title)
+        inputs = processor(text=[product_title], images=image, return_tensors="pt", padding=True)
+
+        # Get image and text embeddings
+        with torch.no_grad():
+            outputs = model(**inputs)
+
+        # Compute cosine similarity between image and text embeddings
+        image_embeds = outputs.image_embeds
+        text_embeds = outputs.text_embeds
+        similarity = torch.cosine_similarity(image_embeds, text_embeds)
+
+        return similarity.item()
+
+    def _is_product_image(self, model, processor, image_path):
+        # Load the image
+        image = self._load_image(image_path)
+
+        # Prepare the image and text prompt
+        inputs = processor(text=["a photo of a product", "a photo of something that is not a product"], images=image,
+                           return_tensors="pt", padding=True)
+
+        # Make the prediction
+        with torch.no_grad():
+            outputs = model(**inputs)
+
+        # Get the similarity scores for the two categories
+        logits_per_image = outputs.logits_per_image  # this is the similarity score between the image and the text
+        probs = logits_per_image.softmax(dim=1)  # softmax to get probabilities
+
+        product_prob = probs[0][0].item()  # Probability that the image is a product
+        non_product_prob = probs[0][1].item()  # Probability that the image is not a product
+
+        # Decision based on higher probability
+        if product_prob > non_product_prob:
+            return True  # It's a product
+        else:
+            return False  # It's not a product
+
+# --------------------------------------------End of functions to apply CLIP models----------------------------------------------------
 
     #initial_wait is the initial wait tiem
     #finding_wait is the wait time until I find the corresponding elements on a webpage.
-    def find_product_image(self, initial_wait=5, finding_wait=2, extra_wait_param=2, final_wait=1):
+    def find_product_image(self, product_title, initial_wait=5, finding_wait=2, extra_wait_param=2, final_wait=1):
         heap_of_images = []
-        time.sleep(initial_wait)
+        #time.sleep(initial_wait)
+        WebDriverWait(self.driver, initial_wait).until(
+            lambda driver: driver.execute_script("return document.readyState") == "complete"
+        )
         self.driver = self.__ensure_browser_open(self.driver)
         self.driver.get(self.product_link)
         try:
@@ -146,20 +234,21 @@ class GenericScraper:
         product_im_class_li = self.driver.find_elements(By.XPATH, image_xpath)
         if (not product_im_class_li):
             #if not then find the largest image in the viewing window.
-            heap_of_images = self.__find_max_img_helper(self.driver, heap_of_images, finding_wait, extra_wait_param)
+            heap_of_images = self.__find_max_img_helper(self.driver, heap_of_images, product_title, finding_wait, extra_wait_param)
         else:
             for web_element in product_im_class_li:
-                heap_of_images = self.__find_max_img_helper(web_element, heap_of_images, finding_wait, extra_wait_param)
-        if(heap_of_images):
+                heap_of_images = self.__find_max_img_helper(web_element, heap_of_images, product_title, finding_wait, extra_wait_param)
+        while(heap_of_images):
+            model, processor = self._load_clip_model()
             elmt = heapq.heappop(heap_of_images)
-            max_img_url = elmt[1]
-        if len(max_img_url)>0:
-            max_img_url = self.__find_url_helper(max_img_url)
-            time.sleep(final_wait)
-            self.driver.close()
-            return max_img_url
+            max_img_url = elmt[2]
+            if len(max_img_url)>0:
+                max_img_url = self.__find_url_helper(max_img_url)
+                time.sleep(final_wait)
+                #self.driver.close()
+                return max_img_url
         time.sleep(final_wait)
-        self.driver.close()
+        #self.driver.close()
         return 'Not found'
             # get product price
 
@@ -174,7 +263,10 @@ class GenericScraper:
         list_of_tags = ['h1', 'h2', 'h3', 'span']
         self.driver = self.__ensure_browser_open(self.driver)
         self.driver.get(self.product_link)
-        time.sleep(initial_wait)
+        #time.sleep(initial_wait)
+        WebDriverWait(self.driver, initial_wait).until(
+            lambda driver: driver.execute_script("return document.readyState") == "complete"
+        )
         try:
             self.driver.maximize_window()
         except WebDriverException as e:
@@ -208,11 +300,11 @@ class GenericScraper:
                         heapq.heappush(heap_of_titles, (-size, titletxt))
         while (heap_of_titles):
             title_res = heapq.heappop(heap_of_titles)
-            if self.zero_shot_text_binary_classify(title_res[1], text_classifier_threshold):
+            if self._zero_shot_text_binary_classify(title_res[1], text_classifier_threshold):
                 time.sleep(final_wait)
-                self.driver.close()
+                #self.driver.close()
                 return title_res[1]
-        self.driver.close()
+        #self.driver.close()
         return 'Not found'
 
     #initial_wait is the initial wait tiem
@@ -228,7 +320,11 @@ class GenericScraper:
         #self.driver.maximize_window()
         self.driver = self.__ensure_browser_open(self.driver)
         self.driver.get(self.product_link)
-        time.sleep(initial_wait)
+        #time.sleep(initial_wait)
+        # Wait for the document to be fully loaded
+        WebDriverWait(self.driver, initial_wait).until(
+            lambda driver: driver.execute_script("return document.readyState") == "complete"
+        )
         '''
         try:
             self.driver.maximize_window()
@@ -291,7 +387,7 @@ class GenericScraper:
             return pri[1]
             #print(pri[1].group())
         time.sleep(final_wait)
-        self.driver.close()
+        #self.driver.close()
         return 'Not found'
 
 def main():
@@ -307,10 +403,11 @@ def main():
     LINK_8 = "https://www.capturelandscapes.com/photographer-month-thomas-heaton/"
     LINK_9 = "https://thomasheaton.co.uk/product/my-book/"
     LINK_10 = "https://store.dji.com/product/dji-rs-3?ch=launch-rs3-samholland&clickaid=X3zYImu0We91G3QjtfjeJM7ZOpzMZU12&clickpid=745444&clicksid=7f11750ff3a2407875d68a8470411788&from=dap_unique&pm=custom&utm_campaign=launch-rs3&utm_content=samholland&utm_medium=kol-affiliates&utm_source=yt&vid=116541"
-    ex = GenericScraper(LINK_10)
+    ex = GenericScraper(LINK_5)
     print(ex.match_price())
-    print(ex.find_product_title())
-    print(ex.find_product_image())
+    title = ex.find_product_title()
+    print(title)
+    print(ex.find_product_image(product_title=title))
 
 if __name__ == "__main__":
     main()
