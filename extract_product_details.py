@@ -23,7 +23,7 @@ def json_from_video(video_link, json_path, CLEAR_JSON=True, finding_wait=8, fina
     PATH = "C:/Program Files/chromedriver-win64/chromedriver.exe"
     REDIRECT = "https://www.youtube.com/redirect?"
     #Stop redirecting to common social media URLs
-    AMAZON = "https://www.amazon.com"
+    AMAZON = "https://www.amazon."
     SOCIAL_MEDIA_URLS = ["facebook.com", "instagram.com", "x.com", "pinterest.com", "tiktok.com"]
     json_objs = []
     service = Service(executable_path=PATH)
@@ -245,7 +245,7 @@ def generic_web(current_url, json_objs):
             if(product_title != 'Not found'):
                 product_img_url = generic_scraper.find_product_image(product_title)
                 if (product_img_url != 'Not found'):
-                    #print("appending json...")
+                    print("appending json...")
                     info = {
                         "product_price": price,
                         "product_image": product_img_url,
@@ -268,8 +268,8 @@ if __name__ == '__main__':
     JSON_PATH_3 = 'product_info_3.json'
     JSON_PATH_4 = 'product_info_4.json'
     #json_from_video(AMZN_LINK_TWO, JSON_PATH_4)
-    json_from_video(LINK_ZERO, JSON_PATH_0)
-    #json_from_video(LINK_THREE, JSON_PATH_3)
+    #json_from_video(LINK_ZERO, JSON_PATH_0)
+    json_from_video(LINK_THREE, JSON_PATH_3)
     #json_from_video(LINK_TWO, JSON_PATH_2)
     '''
     df = pd.read_json("product_info.json", orient='records')
