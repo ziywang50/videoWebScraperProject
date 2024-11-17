@@ -15,6 +15,7 @@ from transformers import pipeline
 from transformers import CLIPProcessor, CLIPModel
 import torch
 from PIL import Image
+from PIL import UnidentifiedImageError
 import numpy as np
 import requests
 
@@ -155,7 +156,7 @@ class GenericScraper:
         try:
             # Load and preprocess the image
             image = self._load_image(image_path_or_url)
-        except FileNotFoundError:
+        except (FileNotFoundError, UnidentifiedImageError):
             return 0
 
         # Preprocess the image and text (title)
@@ -201,7 +202,7 @@ class GenericScraper:
 
     #initial_wait is the initial wait tiem
     #finding_wait is the wait time until I find the corresponding elements on a webpage.
-    def find_product_image(self, product_title, initial_wait=5, finding_wait=2, extra_wait_param=2, final_wait=0.5):
+    def find_product_image(self, product_title, initial_wait=5, finding_wait=3, extra_wait_param=2, final_wait=1):
         heap_of_images = []
         #time.sleep(initial_wait)
         WebDriverWait(self.driver, initial_wait).until(
@@ -255,7 +256,7 @@ class GenericScraper:
     #initial_wait is the initial wait tiem
     #finding_wait is the wait time until I find the corresponding elements on a webpage.
     #extra_wait_param is the multiple of wait time if a timeout occurs
-    def find_product_title(self, initial_wait=5, finding_wait=2, final_wait=0.5, extra_wait_param=3, text_classifier_threshold=0.7):
+    def find_product_title(self, initial_wait=5, finding_wait=3, final_wait=1, extra_wait_param=3, text_classifier_threshold=0.7):
         t = None
         heap_of_titles = []
         titlels = ['"title"', '"Title"', '"name"', '"Name"', '"header"', '"Header"', '"Heading"', '"heading"',
@@ -311,7 +312,7 @@ class GenericScraper:
     #finding_wait is the wait time until I find the corresponding elements on a webpage.
     #extra_wait_param is the multiple of wait time if a timeout occurs
 
-    def match_price(self, initial_wait=5, finding_wait=2, final_wait=0.5, extra_wait_param=3):
+    def match_price(self, initial_wait=8, finding_wait=3, final_wait=1, extra_wait_param=3):
         reli = []
         p = None
         span = None
@@ -322,9 +323,17 @@ class GenericScraper:
         self.driver.get(self.product_link)
         #time.sleep(initial_wait)
         # Wait for the document to be fully loaded
-        WebDriverWait(self.driver, initial_wait).until(
-            lambda driver: driver.execute_script("return document.readyState") == "complete"
-        )
+        try:
+            WebDriverWait(self.driver, initial_wait).until(
+                lambda driver: driver.execute_script("return document.readyState") == "complete"
+            )
+        except TimeoutException:
+            try:
+                WebDriverWait(self.driver, 2*initial_wait).until(
+                    lambda driver: driver.execute_script("return document.readyState") == "complete"
+                )
+            except TimeoutException:
+                return 'Not found'
         '''
         try:
             self.driver.maximize_window()
@@ -403,7 +412,7 @@ def main():
     LINK_8 = "https://www.capturelandscapes.com/photographer-month-thomas-heaton/"
     LINK_9 = "https://thomasheaton.co.uk/product/my-book/"
     LINK_10 = "https://store.dji.com/product/dji-rs-3?ch=launch-rs3-samholland&clickaid=X3zYImu0We91G3QjtfjeJM7ZOpzMZU12&clickpid=745444&clicksid=7f11750ff3a2407875d68a8470411788&from=dap_unique&pm=custom&utm_campaign=launch-rs3&utm_content=samholland&utm_medium=kol-affiliates&utm_source=yt&vid=116541"
-    ex = GenericScraper(LINK_5)
+    ex = GenericScraper(LINK_3)
     print(ex.match_price())
     title = ex.find_product_title()
     print(title)
