@@ -25,6 +25,8 @@ def json_from_video(video_link, json_path, CLEAR_JSON=True, finding_wait=8, fina
     #Stop redirecting to common social media URLs
     AMAZON = "https://www.amazon."
     SOCIAL_MEDIA_URLS = ["facebook.com", "instagram.com", "x.com", "pinterest.com", "tiktok.com"]
+    URL_REGEX = re.compile("^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,6}(:\d+)?(\/[^\s]*)?$")
+    YOUTUBE = "https://www.youtube.com"
     json_objs = []
     service = Service(executable_path=PATH)
     driver = webdriver.Chrome()
@@ -59,7 +61,8 @@ def json_from_video(video_link, json_path, CLEAR_JSON=True, finding_wait=8, fina
     for link in links:
         href = link.get_attribute('href')
         if href:
-            if (href.find(REDIRECT) == 0):
+            #either a redirect url or another url that is not in youtube
+            if (href.find(REDIRECT) == 0 or (href.find(YOUTUBE) == -1 and re.search(URL_REGEX, href))):
                 response = requests.get(href)
                 #If the link opens successfully
                 if (response.status_code == 200):
@@ -69,8 +72,10 @@ def json_from_video(video_link, json_path, CLEAR_JSON=True, finding_wait=8, fina
                         print(f"Link name is {href}")
                         driver.get(href)
                         #If youtube asks me to redirect, click on button
-                        if driver.find_element(By.XPATH, './/*[@id="invalid-token-redirect-goto-site-button"]'):
+                        try:
                             driver.find_element(By.XPATH, './/*[@id="invalid-token-redirect-goto-site-button"]').click()
+                        except NoSuchElementException:
+                            pass
                         current_url = driver.current_url
                         for s in SOCIAL_MEDIA_URLS:
                             if (current_url.find(s) != -1):
@@ -102,6 +107,8 @@ def json_from_video(video_link, json_path, CLEAR_JSON=True, finding_wait=8, fina
     #    items = driver.find_elements(By.CLASS_NAME, "style-scope ytd-merch-shelf-item-renderer")
     #time.sleep(10)
     #driver.quit()
+
+#Function for opening up an amazon page and finding product info and appending to json file.
 class Amazon_web:
     def __init__(self):
         self.PRICE_ID = 'corePrice_feature_div'
@@ -212,7 +219,7 @@ class Amazon_web:
             except InvalidSessionIdException as e2:
                 print("InvalidSessionException", e2)
 
-
+    #Helper on locating the price element of a webpage
     def __price_helper(self, price_element):
         try:
             whole_class = price_element.find_element(By.CLASS_NAME, self.PRICE_WHOLE_CLASS)
@@ -237,6 +244,8 @@ class Amazon_web:
                         print("Find price failed. Message: " + e)
                         return -1
             return -1
+
+#For any other web page(except the social media pages that are blocked)
 def generic_web(current_url, json_objs):
         generic_scraper = GenericScraper(current_url)
         price = generic_scraper.match_price()
@@ -261,15 +270,21 @@ if __name__ == '__main__':
     LINK_TWO = 'https://www.youtube.com/watch?v=8QM7bnB1HzA'
     LINK_THREE = 'https://www.youtube.com/watch?v=TDzFYE8kA78'
     AMZN_LINK_TWO = 'https://www.youtube.com/watch?v=RYRLxVfijpI'
+    LINK_FIVE = 'https://www.youtube.com/watch?v=3zLvByt52go'
+    LINK_SIX = 'https://www.youtube.com/watch?v=7B8owry2dog'
     #AMZN_LINK_ZERO = 'https://www.youtube.com/watch?v=yOl7q-DIz4s'
     JSON_PATH_0 = 'product_info_0.json'
     JSON_PATH_1 = 'product_info_1.json'
     JSON_PATH_2 = 'product_info_2.json'
     JSON_PATH_3 = 'product_info_3.json'
     JSON_PATH_4 = 'product_info_4.json'
+    JSON_PATH_5 = 'product_info_5.json'
+    JSON_PATH_6 = 'product_info_6.json'
     #json_from_video(AMZN_LINK_TWO, JSON_PATH_4)
     #json_from_video(LINK_ZERO, JSON_PATH_0)
-    json_from_video(LINK_THREE, JSON_PATH_3)
+    json_from_video(LINK_ONE, JSON_PATH_1)
+    #json_from_video(LINK_FIVE, JSON_PATH_5)
+    #json_from_video(LINK_SIX, JSON_PATH_6)
     #json_from_video(LINK_TWO, JSON_PATH_2)
     '''
     df = pd.read_json("product_info.json", orient='records')
