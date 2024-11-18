@@ -38,4 +38,5 @@ python extract_product_details.py
 ```
 Link for demo video
 https://drive.google.com/file/d/18BKEwXRUjLv5VuqUmgYAG6bbZCru5z9M/view?usp=sharing
+https://drive.google.com/file/d/1h-hYwMdfLRVQ53lJepKD8L8zLLZ-h9AG/view?usp=sharing
 
