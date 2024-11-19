@@ -13,13 +13,22 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import StaleElementReferenceException
 from amazoncaptcha import AmazonCaptcha
 from GenericScraper import GenericScraper
 from selenium.common.exceptions import InvalidSessionIdException
 import re
 
-
 def json_from_video(video_link, json_path, CLEAR_JSON=True, finding_wait=8, final_wait=0.5, extra_wait_param=2):
+    try:
+        json_from_video_helper(video_link, json_path, CLEAR_JSON=CLEAR_JSON, finding_wait=finding_wait, final_wait=final_wait, extra_wait_param=extra_wait_param)
+    except StaleElementReferenceException as e:
+        print("Please do not refresh page and retry", e)
+        return
+    except NoSuchElementException as e:
+        print("Please do not close window and retry", e)
+        return
+def json_from_video_helper(video_link, json_path, CLEAR_JSON=True, finding_wait=8, final_wait=0.5, extra_wait_param=2):
     PATH = "C:/Program Files/chromedriver-win64/chromedriver.exe"
     REDIRECT = "https://www.youtube.com/redirect?"
     #Stop redirecting to common social media URLs
@@ -47,52 +56,55 @@ def json_from_video(video_link, json_path, CLEAR_JSON=True, finding_wait=8, fina
     try:
         input_element = driver.find_element(By.XPATH, './/*[@id="expand"]')
         input_element.click()
-    except NoSuchElementException:
-        pass
-    #Find description of the vide
-    try:
         WebElement = driver.find_element(By.XPATH, './/*[@id="description-inner"]')
     except NoSuchElementException:
-        print("No description of the video")
-        return
+        pass
     #Find all 'a' tag, which contain all links
-    links = WebElement.find_elements(By.TAG_NAME, 'a')
+    if (WebElement):
+        WebDriverWait(WebElement, 5).until(EC.presence_of_all_elements_located((By.TAG_NAME, 'a')))
+        links = WebElement.find_elements(By.TAG_NAME, 'a')
     amzn = Amazon_web()
     for link in links:
         href = link.get_attribute('href')
-        if href:
-            #either a redirect url or another url that is not in youtube
-            if (href.find(REDIRECT) == 0 or (href.find(YOUTUBE) == -1 and re.search(URL_REGEX, href))):
-                response = requests.get(href)
-                #If the link opens successfully
-                if (response.status_code == 200):
+        #either a redirect url or another url that is not in youtube
+        if (href.find(REDIRECT) == 0 or (href.find(YOUTUBE) == -1 and re.search(URL_REGEX, href))):
+            response = requests.get(href)
+            #If the link opens successfully
+            if (response.status_code == 200):
+                try:
+                    IS_SOCIAL_MEDIA_URL = False
+                    driver = webdriver.Chrome()
+                    print(f"Link name is {href}")
+                    driver.get(href)
+                    #If youtube asks me to redirect, click on button
                     try:
-                        IS_SOCIAL_MEDIA_URL = False
-                        driver = webdriver.Chrome()
-                        print(f"Link name is {href}")
-                        driver.get(href)
-                        #If youtube asks me to redirect, click on button
+                        driver.find_element(By.XPATH, './/*[@id="invalid-token-redirect-goto-site-button"]').click()
+                    except NoSuchElementException:
+                        pass
+                    current_url = driver.current_url
+                    for s in SOCIAL_MEDIA_URLS:
+                        if (current_url.find(s) != -1):
+                            IS_SOCIAL_MEDIA_URL = True
+                            time.sleep(final_wait)
+                            driver.close()
+                            break
+                    if not IS_SOCIAL_MEDIA_URL:
                         try:
-                            driver.find_element(By.XPATH, './/*[@id="invalid-token-redirect-goto-site-button"]').click()
-                        except NoSuchElementException:
-                            pass
-                        current_url = driver.current_url
-                        for s in SOCIAL_MEDIA_URLS:
-                            if (current_url.find(s) != -1):
-                                IS_SOCIAL_MEDIA_URL = True
-                                time.sleep(final_wait)
-                                driver.close()
-                                break
-                        if not IS_SOCIAL_MEDIA_URL:
                             if (current_url.find(AMAZON) == 0):
                                 amzn.amzn_web(driver, json_objs)
                             else:
                                 generic_web(current_url, json_objs)
-                            time.sleep(final_wait)
-                            driver.close()
-                    except InvalidSessionIdException as e:
-                        print("Link skipped due to InvalidSessionIdException ", e)
-                        continue
+                        except StaleElementReferenceException:
+                            print("Element no longer exists. Please do not refresh the webpage as it will interrupt the process.")
+                            continue
+                        except NoSuchElementException:
+                            print("Please do not close window, and re-run.")
+                            continue
+                        #time.sleep(final_wait)
+                        driver.close()
+                except InvalidSessionIdException as e:
+                    print("Link skipped due to InvalidSessionIdException ", e)
+                    continue
 
     #By default, it clears the current json with the same name.
     if (CLEAR_JSON):
@@ -272,6 +284,7 @@ if __name__ == '__main__':
     AMZN_LINK_TWO = 'https://www.youtube.com/watch?v=RYRLxVfijpI'
     LINK_FIVE = 'https://www.youtube.com/watch?v=3zLvByt52go'
     LINK_SIX = 'https://www.youtube.com/watch?v=7B8owry2dog'
+    LINK_SEVEN = 'https://www.youtube.com/watch?v=9PCtfKr5Uw8'
     #AMZN_LINK_ZERO = 'https://www.youtube.com/watch?v=yOl7q-DIz4s'
     JSON_PATH_0 = 'product_info_0.json'
     JSON_PATH_1 = 'product_info_1.json'
@@ -280,9 +293,11 @@ if __name__ == '__main__':
     JSON_PATH_4 = 'product_info_4.json'
     JSON_PATH_5 = 'product_info_5.json'
     JSON_PATH_6 = 'product_info_6.json'
+    JSON_PATH_7 = 'product_info_7.json'
     #json_from_video(AMZN_LINK_TWO, JSON_PATH_4)
     #json_from_video(LINK_ZERO, JSON_PATH_0)
-    json_from_video(LINK_ONE, JSON_PATH_1)
+    #json_from_video(LINK_ONE, JSON_PATH_1)
+    json_from_video(LINK_ZERO, JSON_PATH_0)
     #json_from_video(LINK_FIVE, JSON_PATH_5)
     #json_from_video(LINK_SIX, JSON_PATH_6)
     #json_from_video(LINK_TWO, JSON_PATH_2)

@@ -25,6 +25,7 @@ from io import BytesIO
 class GenericScraper:
     def __init__(self, product_link):
         chrome_options = Options()
+        #chrome_options.add_argument("--headless=new")
         chrome_options.add_argument("--start-maximized")  # Ensure the new session starts maximized
         #Both decimals and integers
         self.__price_regex = re.compile('\s*(USD|EUR|GBP|CNY|KRW|JPY|€|£|¥|₩|\$)\s?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)|(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)\s?(USD|EUR|GBP|CNY|KRW|JPY|€|£|\$|¥|₩)')
@@ -532,5 +533,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    #main()
 
