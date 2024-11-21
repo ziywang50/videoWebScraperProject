@@ -66,6 +66,8 @@ def json_from_video_helper(video_link, json_path, CLEAR_JSON=True, finding_wait=
     amzn = Amazon_web()
     for link in links:
         href = link.get_attribute('href')
+        if not href:
+            continue
         #either a redirect url or another url that is not in youtube
         if (href.find(REDIRECT) == 0 or (href.find(YOUTUBE) == -1 and re.search(URL_REGEX, href))):
             response = requests.get(href)
@@ -99,6 +101,9 @@ def json_from_video_helper(video_link, json_path, CLEAR_JSON=True, finding_wait=
                             continue
                         except NoSuchElementException:
                             print("Please do not close window, and re-run.")
+                            continue
+                        except NoSuchWindowException:
+                            print("Window closed. Please do not close window.")
                             continue
                         #time.sleep(final_wait)
                         driver.close()
@@ -134,7 +139,7 @@ class Amazon_web:
         self.PRICE_REGEX = re.compile(
             '\s*(USD|EUR|GBP|CNY|KRW|JPY|€|£|¥|₩|\$)\s?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)|(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)\s?(USD|EUR|GBP|CNY|KRW|JPY|€|£|\$|¥|₩)')
         #self.SIMILAR_PRODUCT_LINK = ".//a[contains(@id, 'sp_detail') and contains(@id, 'title')]"
-        self.SIMILAR_PRODUCT_LINK = ".//a[contains(@id, 'sp_detail_') and contains(@id, '_title')]"
+        self.SIMILAR_PRODUCT_LINK = ".//a[(contains(@id, 'sp_detail_') and contains(@id, '_title')) or contains(@class, a-link)]"
         self.SIMILAR_PRODUCT_LINK_REGEX = re.compile("^https?:\/\/(?:www\.)?amazon\.com(?:\/[^\s]*)?$")
         # Find element in Amazon's main section
 
@@ -191,11 +196,12 @@ class Amazon_web:
         if (related_products):
             try:
                 #wait = WebDriverWait(driver, 2)  # Wait for up to 10 seconds
+                #Wait on webDriver for a number of seconds
                 WebDriverWait(driver, finding_wait).until(
-                    EC.presence_of_all_elements_located((By.CLASS_NAME, "a-carousel-card"))
+                    EC.presence_of_all_elements_located((By.XPATH, "//ol[@class='a-carousel']/li[@class='a-carousel-card']"))
                 )
                 #Related Products Section
-                product_cards = driver.find_elements(By.CLASS_NAME, "a-carousel-card")
+                product_cards = driver.find_elements(By.XPATH, "//ol[@class='a-carousel']/li[@class='a-carousel-card']")
                 for card in product_cards:
                     try:
                         WebDriverWait(card, finding_wait).until(
@@ -207,8 +213,13 @@ class Amazon_web:
                         product_title = card.find_element(By.TAG_NAME, "div").text
                         product_img = card.find_element(By.TAG_NAME, "img").get_attribute('src')
                         product_price = self.__price_helper(card)
-                        buy_link_a = card.find_element(By.XPATH, self.SIMILAR_PRODUCT_LINK)
-                        buy_link = buy_link_a.get_attribute('href')
+                        buy_link_a = card.find_elements(By.XPATH, self.SIMILAR_PRODUCT_LINK)
+                        for buy_link_i in buy_link_a:
+                            buy_link = buy_link_i.get_attribute('href')
+                            if buy_link == "javascript:void(0)":
+                                continue
+                            else:
+                                break
                         #print(buy_link)
                         #for buy_link_i in buy_link_a:
                         #    buy_link_res = buy_link_i.get_attribute('href')
@@ -222,7 +233,7 @@ class Amazon_web:
                                 "product_name": product_title,
                                 "buy_link": buy_link
                             }
-                            #print("appending json similar items...")
+                            print("appending json similar items...", info)
                             json_objs.append(info)
                     except NoSuchElementException:
                         pass
@@ -273,7 +284,8 @@ def generic_web(current_url, json_objs):
                         "product_name": product_title,
                         "buy_link": current_url
                     }
-                    json_objs.append(info)
+                    if info not in json_objs:
+                        json_objs.append(info)
         generic_scraper.driver.close()
 
 if __name__ == '__main__':
@@ -285,6 +297,7 @@ if __name__ == '__main__':
     LINK_FIVE = 'https://www.youtube.com/watch?v=3zLvByt52go'
     LINK_SIX = 'https://www.youtube.com/watch?v=7B8owry2dog'
     LINK_SEVEN = 'https://www.youtube.com/watch?v=9PCtfKr5Uw8'
+    LINK_EIGHT = 'https://www.youtube.com/watch?v=0IQpOA0QpBk'
     #AMZN_LINK_ZERO = 'https://www.youtube.com/watch?v=yOl7q-DIz4s'
     JSON_PATH_0 = 'product_info_0.json'
     JSON_PATH_1 = 'product_info_1.json'
@@ -294,13 +307,15 @@ if __name__ == '__main__':
     JSON_PATH_5 = 'product_info_5.json'
     JSON_PATH_6 = 'product_info_6.json'
     JSON_PATH_7 = 'product_info_7.json'
-    #json_from_video(AMZN_LINK_TWO, JSON_PATH_4)
+    JSON_PATH_8 = 'product_info_8.json'
+    json_from_video(LINK_ONE, JSON_PATH_1)
     #json_from_video(LINK_ZERO, JSON_PATH_0)
     #json_from_video(LINK_ONE, JSON_PATH_1)
-    json_from_video(LINK_ZERO, JSON_PATH_0)
+    #json_from_video(LINK_ZERO, JSON_PATH_0)
     #json_from_video(LINK_FIVE, JSON_PATH_5)
     #json_from_video(LINK_SIX, JSON_PATH_6)
     #json_from_video(LINK_TWO, JSON_PATH_2)
+    #json_from_video(LINK_EIGHT, JSON_PATH_8)
     '''
     df = pd.read_json("product_info.json", orient='records')
     print(df.head())

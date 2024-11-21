@@ -53,11 +53,11 @@ class GenericScraper:
             if browser_type.lower() == "chrome":
                 driver = webdriver.Chrome()
                 #driver.get(self.product_link)
-                #self.driver.get(self.product_link)
+                self.driver.get(self.product_link)
             elif browser_type.lower() == "firefox":
                 driver = webdriver.Firefox()
                 #driver.get(self.product_link)
-                #self.driver.get(self.product_link)
+                self.driver.get(self.product_link)
             else:
                 raise ValueError("Unsupported browser type!")
         return driver
@@ -96,7 +96,7 @@ class GenericScraper:
     #Helper to push images in the heap. An image need to meet the similarity threshold to be pushed into the heap, where
     #similarity is defined to be the similarity of that image to the product title, computed using self._find_image_match_product_similarity
     #An image is greater if it has a greater size, and if the same size, compare their similariies.
-    def __find_max_img_helper(self, driver, heap_of_images, product_title, finding_wait=3, extra_wait_param=3, similarity_threshold=0.2, max_webelements=10):
+    def __find_max_img_helper(self, driver, heap_of_images, product_title, finding_wait=3, similarity_threshold=0.15, max_webelements=10):
         try:
             WebDriverWait(driver, finding_wait).until(EC.presence_of_all_elements_located((By.TAG_NAME, 'img')))
         except TimeoutException:
@@ -254,9 +254,9 @@ class GenericScraper:
     #Function that retrieves the largest product image that matches the text (similarity greater than similarity_threshold)
     #initial_wait is the initial wait tiem
     #finding_wait is the wait time until I find the corresponding elements on a webpage.
-    def find_product_image(self, product_title, initial_wait=5, finding_wait=3, extra_wait_param=2, final_wait=1, similarity_threshold=0.2):
+    def find_product_image(self, product_title, initial_wait=0.1, finding_wait=2, final_wait=0.01, similarity_threshold=0.15):
         self.driver = self.__ensure_browser_open(self.driver)
-        self.driver.get(self.product_link)
+        #self.driver.get(self.product_link)
         try:
             self.driver.maximize_window()
         except WebDriverException as e:
@@ -285,20 +285,13 @@ class GenericScraper:
         try:
             WebDriverWait(self.driver, finding_wait).until(EC.presence_of_all_elements_located((By.XPATH, image_xpath)))
         except TimeoutException:
-            try:
-                WebDriverWait(self.driver, extra_wait_param*extra_wait_param*finding_wait).until(EC.presence_of_all_elements_located((By.XPATH, image_xpath)))
-            except TimeoutException:
-                pass
+            pass
         except StaleElementReferenceException as e:
-            try:
-                WebDriverWait(self.driver, extra_wait_param*finding_wait).until(
-                    EC.presence_of_all_elements_located((By.XPATH, image_xpath)))
-            except:
-                print("StaleElementRefereceException", e)
+            print("StaleElementRefereceException", e)
         product_im_class_li = self.driver.find_elements(By.XPATH, image_xpath)
         if (not product_im_class_li):
             #if not then find the largest image in the viewing window.
-            heap_of_images = self.__find_max_img_helper(self.driver, heap_of_images, product_title, finding_wait, extra_wait_param, similarity_threshold)
+            heap_of_images = self.__find_max_img_helper(self.driver, heap_of_images, product_title, finding_wait, similarity_threshold)
         else:
             model, processor = self._load_clip_model()
             for web_element in product_im_class_li:
@@ -323,7 +316,7 @@ class GenericScraper:
                     # Check if image-text similarity is greater than threshold
                         if (e_similarity >= similarity_threshold and e_img_size and e_img_url and e_similarity):
                             heapq.heappush(heap_of_images, (-e_img_size, -e_similarity, e_img_url))
-                heap_of_images = self.__find_max_img_helper(web_element, heap_of_images, product_title, finding_wait, extra_wait_param, similarity_threshold)
+                heap_of_images = self.__find_max_img_helper(web_element, heap_of_images, product_title, finding_wait, similarity_threshold)
         while(heap_of_images):
             model, processor = self._load_clip_model()
             elmt = heapq.heappop(heap_of_images)
@@ -341,10 +334,9 @@ class GenericScraper:
     #A function that retrieves the best text from webpage. Text need to be the largest product-related
     #initial_wait is the initial wait tiem
     #finding_wait is the wait time until I find the corresponding elements on a webpage.
-    #extra_wait_param is the multiple of wait time if a timeout occurs
-    def find_product_title(self, initial_wait=5, finding_wait=3, final_wait=1, extra_wait_param=3, text_classifier_threshold=0.7):
+    def find_product_title(self, initial_wait=0.1, finding_wait=2, final_wait=0.01, text_classifier_threshold=0.7):
         self.driver = self.__ensure_browser_open(self.driver)
-        self.driver.get(self.product_link)
+        #self.driver.get(self.product_link)
         time.sleep(initial_wait)
         try:
             self.driver.maximize_window()
@@ -364,7 +356,6 @@ class GenericScraper:
             #print("Cookies popup accepted.")
 
         except Exception:
-            #print("No cookies popup appeared or there was an issue:", e)
             pass
         t = None
         heap_of_titles = []
@@ -372,24 +363,21 @@ class GenericScraper:
                    '"product"', '"Product"']
         list_of_tags = ['h1', 'h2', 'h3', 'span']
         title_xpath = self.__list_to_xPath_helper(titlels, list_of_tags)
-        #titlestr = '//h1[contains(@class, ' + title + ')] | //h2[contains(@class, ' + title + ')] | //h3[contains(@class, ' + title + ')]| //span[contains(@class, ' + title + ')]'
+        title_xpath_more = './/h1 | .//h2'
         try:
             WebDriverWait(self.driver, finding_wait).until(
                 EC.presence_of_all_elements_located((By.XPATH, title_xpath)))
+            t = self.driver.find_elements(By.XPATH, title_xpath)
         except TimeoutException:
-            try:
-                WebDriverWait(self.driver, extra_wait_param*finding_wait).until(
-                    EC.presence_of_all_elements_located((By.XPATH, title_xpath)))
-            except:
-                pass
+            pass
         except StaleElementReferenceException as e:
             #wait more time
             try:
-                WebDriverWait(self.driver, extra_wait_param*finding_wait).until(
+                WebDriverWait(self.driver, finding_wait).until(
                     EC.presence_of_all_elements_located((By.XPATH, title_xpath)))
+                t = self.driver.find_elements(By.XPATH, title_xpath)
             except:
                 print("StaleElementReferenceException", e)
-        t = self.driver.find_elements(By.XPATH, title_xpath)
         if t:
             for i in t:
                 #print(self.__viewport_width, self.__viewport_height)
@@ -410,8 +398,7 @@ class GenericScraper:
     #Finds the matching price. Finds the element with the largest size that has text matches a price regular expression
     #initial_wait is the initial wait tiem
     #finding_wait is the wait time until I find the corresponding elements on a webpage.
-    #extra_wait_param is the multiple of wait time if a timeout occurs
-    def match_price(self, initial_wait=5, finding_wait=3, final_wait=1, extra_wait_param=3):
+    def match_price(self, initial_wait=2, finding_wait=1.2, final_wait=0.01, is_dynamic=False):
     #Code for cookie popup
         reli = []
         p = None
@@ -420,8 +407,11 @@ class GenericScraper:
         #self.driver.get(self.product_link)
         #self.driver.maximize_window()
         self.driver = self.__ensure_browser_open(self.driver)
-        self.driver.get(self.product_link)
-        time.sleep(initial_wait)
+        #self.driver.get(self.product_link)
+        if (is_dynamic):
+            time.sleep(initial_wait)
+        else:
+            time.sleep(0.5)
         # Wait for the cookies popup to be visible (adjust the selector based on your page's structure)
         try:
             # For example, we wait for a button with 'accept' or 'agree' text to appear
@@ -446,9 +436,9 @@ class GenericScraper:
         prices = ['"price"', '"Price"']
         #list_of_tags = ['div', 'span']
         list_of_tags = ['div', 'span', 'meta', 'data', 'strong', 'ins']
-        list_of_tags_simple = ['span']
+        list_of_tags_more = ['div', 'span', 'meta', 'data', 'strong', 'ins', 'p']
         prices_xpath = self.__list_to_xPath_helper(prices, list_of_tags)
-        prices_xpath_simple = self.__list_to_xPath_helper(prices, list_of_tags_simple)
+        prices_xpath_more = self.__list_to_xPath_helper(prices, list_of_tags_more)
         '''
         for i,price in enumerate(prices):
             if (i == 0):
@@ -463,20 +453,15 @@ class GenericScraper:
             span = self.driver.find_elements(By.XPATH, prices_xpath)
         except TimeoutException:
             try:
-                WebDriverWait(self.driver, extra_wait_param*finding_wait).until(
-                    EC.presence_of_all_elements_located((By.XPATH, prices_xpath)))
-                span = self.driver.find_elements(By.XPATH, prices_xpath)
-            except TimeoutException:
-                try:
-                    #Use a simpler xpath if timeout
-                    span = self.driver.find_elements(By.XPATH, prices_xpath_simple)
-                except:
-                    pass
+                #Use a simpler xpath if timeout
+                span = self.driver.find_elements(By.XPATH, prices_xpath_more)
+            except:
+                pass
                 #print("timeout")
         except StaleElementReferenceException as e:
             #wait more time
             try:
-                WebDriverWait(self.driver, extra_wait_param*finding_wait).until(
+                WebDriverWait(self.driver, finding_wait).until(
                     EC.presence_of_all_elements_located((By.XPATH, prices_xpath)))
                 span = self.driver.find_elements(By.XPATH, prices_xpath)
             except:
@@ -499,7 +484,7 @@ class GenericScraper:
                             heapq.heappush(reli, (-size, match_res.group()))
         if (reli):
             pri = heapq.heappop(reli)
-            time.sleep(final_wait)
+            #time.sleep(final_wait)
             #self.driver.close()
             return pri[1]
             #print(pri[1].group())
@@ -525,7 +510,9 @@ def main():
     LINK_13 = "https://www.smokingdadbbq.com/product/complete-double-indirect-setup-guide"
     LINK_14 = "https://www.lttstore.com/products/beanie?variant=39499864080487&country=US&currency=USD&utm_campaign=sag_organic&srsltid=AfmBOoq3d0XOuWSxHD6BP_OL1pkbKczmyjHbo1lkjFKInXNuKG0GzHd7TVQ&utm_content=YT3-61NNpZv4HRfDh8OlSK_DOlJ06ZOUwRKiUc5U2pH5FkJ8dR4J2PiQ9QVpr1yUv4IRVVy1lb_SmBRclvLzG9CRmQ&utm_term=UCXuqSBlHAE6Xw-yeJA0Tunw&utm_medium=product_shelf&utm_source=youtube"
     LINK_15 = "https://www.gregdoucette.com/collections/htlt-core-concepts"
-    ex = GenericScraper(LINK_15)
+    LINK_16 = "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html"
+    LINK_17 = "https://lapiazzaovens.com/products/2024-piccolo-24-pizza-oven"
+    ex = GenericScraper(LINK_6)
     print(ex.match_price())
     title = ex.find_product_title()
     print(title)
